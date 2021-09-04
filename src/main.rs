@@ -30,9 +30,13 @@ fn main() {
         )
     }
 
+    let mut expected: Vec<f64>;
+
     for (count, p) in img_vec.iter().zip(img_labels.iter_mut()).enumerate() {
         let (i, j) = p;
+
         net.run(&i.data_1d);
+
         i.print();
         println!(
             "\nLabel:\n{}\nOutput:\n{} => {}\n{:?}\n",
@@ -41,8 +45,25 @@ fn main() {
             net.surety.unwrap(),
             net.output.as_ref().unwrap()
         );
+
+        expected = vec![0.0; 9];
+        expected.insert(*j as usize, 1.0);
+
+        println!("Cost: {}\n", net.cost(&expected));
         println!("{}\n", count+1);
-        std::thread::sleep(std::time::Duration::new(2,0));
+
+        // println!("Deltas: {:?}\n", net.deltas(&expected));
+        let wd: Vec<Vec<Vec<f64>>>;
+        let bd: Vec<Vec<f64>>;
+        let x = net.deltas(&expected);
+        wd = x.0;
+        bd = x.1;
+
+        // println!("{:?}", wd[2][0]);
+
+        net.apply_deltas(wd, bd, 1.0);
+
+        // std::thread::sleep(std::time::Duration::new(10,0));
     }
 
     println!("Image:\n{}", img_vec[34]);

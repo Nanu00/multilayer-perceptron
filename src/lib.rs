@@ -9,7 +9,13 @@ fn squish(i: f64) -> f64 {
     1.0 / ( 1.0 + (-i).exp() )
 }
 
+fn d_squish(i: f64) -> f64 {
+    // (-i).exp() * squish(i).powf(2.0)
+    return 0.25
+}
+
 pub struct Neuron {
+    pub input: Vec<f64>,
     pub weights: Vec<f64>,
     pub bias: f64,
     pub value: f64,
@@ -24,6 +30,7 @@ impl Neuron {
         }
         let bias = rng.gen_range(-1.0..1.0);
         Neuron {
+            input: vec![],
             weights: n,
             bias,
             value: 0.0,
@@ -33,11 +40,17 @@ impl Neuron {
     pub fn trigger(&mut self, input: &Vec<f64>) -> Result<f64, Error> {
         // println!("Weights\n{:?}\n\n", self.weights);
         if input.len() == self.weights.len() {
+            self.input = input.clone();
             self.value = squish(self.weights.iter().zip(input.iter()).map(|(x, y)| x*y).sum::<f64>() + self.bias);
             Ok(self.value)
         } else {
             Err(Error::WrongSize)
         }
+    }
+
+    pub fn apply_deltas(&mut self, wd: &Vec<f64>, bd: f64, lr: f64) {
+        self.weights.iter_mut().zip(wd.iter()).for_each(|(w, d)| *w -= d * lr );
+        self.bias -= bd * lr;
     }
 }
 
@@ -60,6 +73,13 @@ impl Layer {
 
     pub fn run(&mut self, inputs: Vec<f64>) {
         self.values = self.neurons.iter_mut().map( |x| x.trigger(&inputs).unwrap() ).collect();
+    }
+
+    pub fn apply_deltas(&mut self, wd: &Vec<Vec<f64>>, bd: &Vec<f64>, lr: f64) {
+        // println!("{}-{}-{}", wd.len(), bd.len(), self.neurons.len());
+        for (j, n) in self.neurons.iter_mut().enumerate() {
+            n.apply_deltas(&wd[j], bd[j], lr);
+        }
     }
 }
 
@@ -107,6 +127,66 @@ impl Network {
         };
         self.surety = surety;
         self.best_match = best_match;
+    }
+
+    // pub fn bp(&mut self, expected: &Vec<u8>) {
+        
+    // }
+    
+    pub fn cost(&self, expected: &Vec<f64>) -> f64 {
+        self.output.as_ref().unwrap().iter()
+            .zip(expected.iter())
+            .map( |(a, b)| (b - a).powf(2.0) )
+            .sum()
+    }
+
+    pub fn deltas(&self, expected: &Vec<f64>) -> (Vec<Vec<Vec<f64>>>, Vec<Vec<f64>>) {
+        let mut v2d_dc_dw: Vec<Vec<Vec<f64>>> = vec![];
+        let mut v2d_dc_db: Vec<Vec<f64>> = vec![vec![]; self.layers.len()];
+
+        let mut v_dc_da: Vec<f64> = self.output.as_ref().unwrap().iter()
+            .zip(expected.iter())
+            .map( | ( a, y ) | 2.0 * ( a - y ) )
+            .collect();
+        // println!("{:?}", v_dc_da);
+        let mut v_dc_da_next: Vec<f64> = vec![];
+
+        for (lnum, l) in self.layers.iter().enumerate().rev() {
+            let mut v1d_dc_dw: Vec<Vec<f64>> = vec![vec![]; l.neurons.len()];
+            if lnum != 0 {
+                v_dc_da_next = vec![0.0; self.layers[lnum-1].neurons.len()];
+            }
+            for (count, n) in l.neurons.iter().enumerate() {
+                let z = n.input.iter().zip(n.weights.iter()).map( | (a, b) | a * b ).sum();
+                let mut dc_dz = 0.0;
+                if d_squish(z).is_finite() {
+                    dc_dz = d_squish(z) * v_dc_da[count];
+                }
+                v2d_dc_db[lnum].push(dc_dz);
+                for i in n.input.iter() {
+                    v1d_dc_dw[count].push(dc_dz * i);
+                }
+                // println!("{:?}", v1d_dc_dw);
+                // std::thread::sleep(std::time::Duration::new(5,0));
+                for (i, w) in v_dc_da_next.iter_mut().zip(n.weights.iter()) {
+                    *i += dc_dz * w;
+                }
+            }
+            v2d_dc_dw.push(v1d_dc_dw);
+            v_dc_da = v_dc_da_next.clone();
+            // println!("{:?}", v_dc_da_next);
+            // std::thread::sleep(std::time::Duration::new(2,0));
+        }
+        // println!("{:?}", v2d_dc_dw);
+        // std::thread::sleep(std::time::Duration::new(10,0));
+        (v2d_dc_dw, v2d_dc_db)
+    }
+
+    pub fn apply_deltas(&mut self, wd: Vec<Vec<Vec<f64>>>, bd: Vec<Vec<f64>>, lr: f64) {
+        let bd: Vec<Vec<f64>> = bd.into_iter().rev().collect();
+        for (j, l) in self.layers.iter_mut().rev().enumerate() {
+            l.apply_deltas(&wd[j], &bd[j], lr);
+        }
     }
 }
 
