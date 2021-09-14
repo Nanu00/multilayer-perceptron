@@ -61,11 +61,58 @@ fn main() {
 
         // println!("{:?}", wd[2][0]);
 
-        net.apply_deltas(wd, bd, 1.0);
+        net.apply_deltas(wd, bd, 0.1);
 
         // std::thread::sleep(std::time::Duration::new(10,0));
     }
 
-    println!("Image:\n{}", img_vec[34]);
-    println!("Label:\n{}", img_labels[34]);
+
+    let unseen_idx_imgs = IdxData::new("./dataset/t10k-images-idx3-ubyte");
+    let unseen_idx_labels = IdxData::new("./dataset/t10k-labels-idx1-ubyte");
+
+    let mut unseen_img_vec: Vec<Image> = Vec::new();
+    let mut unseen_img_labels: Vec<u8> = Vec::new();
+
+    for i in 0..unseen_idx_imgs.sizes[0] {
+        unseen_img_vec.push(Image::from_slice(&unseen_idx_imgs.data[(res*i)..(res*(i+1))], unseen_idx_imgs.sizes[1], unseen_idx_imgs.sizes[2]))
+    }
+    
+    for i in unseen_idx_labels.data.iter() {
+        unseen_img_labels.push(
+            match i {
+                Num::Unsigned(n) => *n,
+                _ => panic!("Not unsigned!"),
+            }
+        )
+    }
+
+    let mut correct = 0;
+
+    for (count, p) in unseen_img_vec.iter().zip(unseen_img_labels.iter_mut()).enumerate() {
+        let (i, j) = p;
+
+        net.run(&i.data_1d);
+
+        if net.best_match.unwrap() == *j {
+            correct = correct + 1;
+        }
+
+        i.print();
+        println!(
+            "\nLabel:\n{}\nOutput:\n{} => {}\n{:?}\n",
+            j,
+            net.best_match.unwrap(),
+            net.surety.unwrap(),
+            net.output.as_ref().unwrap()
+        );
+
+        expected = vec![0.0; 9];
+        expected.insert(*j as usize, 1.0);
+
+        println!("Cost: {}\n", net.cost(&expected));
+        println!("{}\n", count+1);
+        println!("\n\nAccuracy: {}%", (correct*100)/(count+1));
+        // std::thread::sleep(std::time::Duration::new(2,0));
+    }
+
 }

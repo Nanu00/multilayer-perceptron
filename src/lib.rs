@@ -9,11 +9,6 @@ fn squish(i: f64) -> f64 {
     1.0 / ( 1.0 + (-i).exp() )
 }
 
-fn d_squish(i: f64) -> f64 {
-    // (-i).exp() * squish(i).powf(2.0)
-    return 0.25
-}
-
 pub struct Neuron {
     pub input: Vec<f64>,
     pub weights: Vec<f64>,
@@ -157,11 +152,12 @@ impl Network {
                 v_dc_da_next = vec![0.0; self.layers[lnum-1].neurons.len()];
             }
             for (count, n) in l.neurons.iter().enumerate() {
-                let z = n.input.iter().zip(n.weights.iter()).map( | (a, b) | a * b ).sum();
-                let mut dc_dz = 0.0;
-                if d_squish(z).is_finite() {
-                    dc_dz = d_squish(z) * v_dc_da[count];
-                }
+                let z = &n.value;
+                let dc_dz = 0.2 * v_dc_da[count];
+                // let dc_dz = z * ( 1.0 - z ) * v_dc_da[count];
+                // if d_squish(z).is_finite() {
+                //     dc_dz = d_squish(z) * v_dc_da[count];
+                // }
                 v2d_dc_db[lnum].push(dc_dz);
                 for i in n.input.iter() {
                     v1d_dc_dw[count].push(dc_dz * i);
