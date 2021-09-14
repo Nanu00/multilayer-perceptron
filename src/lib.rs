@@ -124,10 +124,6 @@ impl Network {
         self.best_match = best_match;
     }
 
-    // pub fn bp(&mut self, expected: &Vec<u8>) {
-        
-    // }
-    
     pub fn cost(&self, expected: &Vec<f64>) -> f64 {
         self.output.as_ref().unwrap().iter()
             .zip(expected.iter())
@@ -153,11 +149,7 @@ impl Network {
             }
             for (count, n) in l.neurons.iter().enumerate() {
                 let z = &n.value;
-                let dc_dz = 0.2 * v_dc_da[count];
-                // let dc_dz = z * ( 1.0 - z ) * v_dc_da[count];
-                // if d_squish(z).is_finite() {
-                //     dc_dz = d_squish(z) * v_dc_da[count];
-                // }
+                let dc_dz = 0.18 * v_dc_da[count];
                 v2d_dc_db[lnum].push(dc_dz);
                 for i in n.input.iter() {
                     v1d_dc_dw[count].push(dc_dz * i);
@@ -233,11 +225,6 @@ impl fmt::Display for Image {
         let mut out: String = String::from("");
         for i in self.data.iter() {
             for j in i.iter() {
-                // if j >= &128 {
-                //     out = format!("{}00", out);
-                // } else {
-                //     out = format!("{}  ", out);
-                // }
                 out = format!("{}{:2X}", out, j );
             }
             out = format!("{}\n", out);
