@@ -2,6 +2,7 @@ use rand::Rng;
 use std::fmt;
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use serde::{Deserialize, Serialize};
 
 pub mod idx;
 
@@ -9,6 +10,7 @@ fn squish(i: f64) -> f64 {
     1.0 / ( 1.0 + (-i).exp() )
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Neuron {
     pub input: Vec<f64>,
     pub weights: Vec<f64>,
@@ -49,6 +51,7 @@ impl Neuron {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Layer {
     pub neurons: Vec<Neuron>,
     pub values: Vec<f64>,
@@ -78,6 +81,7 @@ impl Layer {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Network {
     pub layers: Vec<Layer>,
     pub output: Option<Vec<f64>>,
@@ -132,6 +136,7 @@ impl Network {
     }
 
     pub fn deltas(&self, expected: &Vec<f64>) -> (Vec<Vec<Vec<f64>>>, Vec<Vec<f64>>) {
+        let cost = self.cost(expected);
         let mut v2d_dc_dw: Vec<Vec<Vec<f64>>> = vec![];
         let mut v2d_dc_db: Vec<Vec<f64>> = vec![vec![]; self.layers.len()];
 
@@ -149,7 +154,7 @@ impl Network {
             }
             for (count, n) in l.neurons.iter().enumerate() {
                 let z = &n.value;
-                let dc_dz = 0.18 * v_dc_da[count];
+                let dc_dz = cost.sqrt() * ( 0.1 + z * ( 1.0 - z ) ) * v_dc_da[count];
                 v2d_dc_db[lnum].push(dc_dz);
                 for i in n.input.iter() {
                     v1d_dc_dw[count].push(dc_dz * i);

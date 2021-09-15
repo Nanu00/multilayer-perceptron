@@ -6,8 +6,12 @@ use digitnn::{
     },
     Network,
 };
+use std::fs::OpenOptions;
+use ron::{ser::to_writer, de::from_reader};
+use clap::{Arg, App, SubCommand};
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 
-fn main() {
+fn train(output_path: &str) {
     let mut net = Network::new_random(784, vec![200, 75, 10]);
 
     let idx_imgs = IdxData::new("./dataset/train-images-idx3-ubyte");
@@ -32,46 +36,67 @@ fn main() {
 
     let mut expected: Vec<f64>;
 
-    for (count, p) in img_vec.iter().zip(img_labels.iter_mut()).enumerate() {
+    let pb = ProgressBar::new(idx_imgs.sizes[0] as u64)
+        .with_style(
+            ProgressStyle::default_bar()
+                    .template("{msg} |{wide_bar}| ETA: {eta_precise} {pos}/{len}")
+                    )
+        .with_message("Training");
+
+    for p in
+        img_vec
+        .iter()
+        .zip(img_labels.iter_mut())
+        .progress_with(pb)
+        {
         let (i, j) = p;
 
         net.run(&i.data_1d);
 
-        i.print();
-        println!(
-            "\nLabel:\n{}\nOutput:\n{} => {}\n{:?}\n",
-            j,
-            net.best_match.unwrap(),
-            net.surety.unwrap(),
-            net.output.as_ref().unwrap()
-        );
-
         expected = vec![0.0; 9];
         expected.insert(*j as usize, 1.0);
 
-        println!("Cost: {}\n", net.cost(&expected));
-        println!("{}\n", count+1);
-
-        // println!("Deltas: {:?}\n", net.deltas(&expected));
         let wd: Vec<Vec<Vec<f64>>>;
         let bd: Vec<Vec<f64>>;
         let x = net.deltas(&expected);
         wd = x.0;
         bd = x.1;
 
-        // println!("{:?}", wd[2][0]);
-
         net.apply_deltas(wd, bd, 0.1);
-
-        // std::thread::sleep(std::time::Duration::new(10,0));
     }
+    
+    let f = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(output_path)
+                .expect("Error opening file");
 
+    to_writer(f, &net).expect("Error writing to file");
+    println!("Neural network dumped to {}", output_path);
+}
 
+fn test(input_path: &str) {
+    let f = OpenOptions::new()
+                .read(true)
+                .open(input_path)
+                .expect("Error opening file");
+
+    let mut net: Network = match from_reader(f){
+        Ok(n) => n,
+        Err(e) => {
+            println!("Failed to load file: {}", e);
+
+            std::process::exit(1);
+        }
+    };
     let unseen_idx_imgs = IdxData::new("./dataset/t10k-images-idx3-ubyte");
     let unseen_idx_labels = IdxData::new("./dataset/t10k-labels-idx1-ubyte");
 
     let mut unseen_img_vec: Vec<Image> = Vec::new();
     let mut unseen_img_labels: Vec<u8> = Vec::new();
+
+    let res = unseen_idx_imgs.sizes[1]*unseen_idx_imgs.sizes[2];
 
     for i in 0..unseen_idx_imgs.sizes[0] {
         unseen_img_vec.push(Image::from_slice(&unseen_idx_imgs.data[(res*i)..(res*(i+1))], unseen_idx_imgs.sizes[1], unseen_idx_imgs.sizes[2]))
@@ -88,7 +113,19 @@ fn main() {
 
     let mut correct = 0;
 
-    for (count, p) in unseen_img_vec.iter().zip(unseen_img_labels.iter_mut()).enumerate() {
+    let pb = ProgressBar::new(unseen_idx_imgs.sizes[0] as u64)
+        .with_style(ProgressStyle::default_bar()
+                    .template("{msg} |{wide_bar}| ETA: {eta_precise} {pos}/{len}")
+                    // .progress_chars("#- ")
+                    )
+        .with_message("Testing");
+
+    for p in 
+        unseen_img_vec
+            .iter()
+            .zip(unseen_img_labels.iter_mut())
+            .progress_with(pb)
+    {
         let (i, j) = p;
 
         net.run(&i.data_1d);
@@ -96,23 +133,50 @@ fn main() {
         if net.best_match.unwrap() == *j {
             correct = correct + 1;
         }
-
-        i.print();
-        println!(
-            "\nLabel:\n{}\nOutput:\n{} => {}\n{:?}\n",
-            j,
-            net.best_match.unwrap(),
-            net.surety.unwrap(),
-            net.output.as_ref().unwrap()
-        );
-
-        expected = vec![0.0; 9];
-        expected.insert(*j as usize, 1.0);
-
-        println!("Cost: {}\n", net.cost(&expected));
-        println!("{}\n", count+1);
-        println!("\n\nAccuracy: {}%", (correct*100)/(count+1));
-        // std::thread::sleep(std::time::Duration::new(2,0));
     }
+    println!("Accuracy: {}%", (correct*100) as f64/(unseen_img_labels.len() as f64));
+}
 
+fn main() {
+    let arg_m = App::new("multilayer-perceptron")
+        .author("Nanu00 <github.com/Nanu00>")
+        .about("Simple neural network")
+        .subcommand(
+            SubCommand::with_name("train")
+            .about("Train the network")
+            .arg(
+                Arg::with_name("output")
+                .short("o")
+                .long("output")
+                .takes_value(true)
+                .value_name("FILE")
+                .help("Output file")
+                .required(true)
+                .last(true)
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("test")
+            .about("run tests using MNIST test database")
+            .arg(
+                Arg::with_name("network")
+                .short("i")
+                .long("network")
+                .takes_value(true)
+                .value_name("FILE")
+                .help("Input file (RON format)")
+                .required(true)
+                .last(true)
+            )
+        )
+        .get_matches();
+
+    match arg_m.subcommand() {
+        ( "train", Some(sub_m) ) => { train(sub_m.value_of("output").unwrap()) }
+        ( "test", Some(sub_m) ) => { test(sub_m.value_of("network").unwrap()) }
+        _ => {
+            println!("No command provided!");
+            std::process::exit(0);
+        }
+    }
 }
