@@ -1,14 +1,7 @@
-use digitnn::{
-    Image,
-    idx::{
-        IdxData,
-        Num,
-    },
-    Network,
-};
+use digitnn::{Image, idx::{IdxData, Num}, Network};
 use std::fs::OpenOptions;
 use ron::{ser::to_writer, de::from_reader};
-use clap::{Arg, App, SubCommand};
+use clap::{Arg, Command};
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 
 fn train(output_path: &str) {
@@ -138,42 +131,41 @@ fn test(input_path: &str) {
 }
 
 fn main() {
-    let arg_m = App::new("multilayer-perceptron")
-        .author("Nanu00 <github.com/Nanu00>")
-        .about("Simple neural network")
-        .subcommand(
-            SubCommand::with_name("train")
+    let args = Command::new("digitnn")
+    .author("Nanu00 <github.com/Nanu00>")
+    .about("Simple neural network")
+    .subcommand(
+            Command::new("train")
             .about("Train the network")
             .arg(
-                Arg::with_name("output")
-                .short("o")
-                .long("output")
-                .takes_value(true)
-                .value_name("FILE")
-                .help("Output file")
-                .required(true)
-                .last(true)
+                    Arg::new("output")
+                    .short('o')
+                    .long("output")
+                    .takes_value(true)
+                    .value_name("FILE")
+                    .help("Output file")
+                    .required(true)
             )
-        )
-        .subcommand(
-            SubCommand::with_name("test")
-            .about("run tests using MNIST test database")
+    )
+    .subcommand(
+            Command::new("test")
+            .about("Test the network")
             .arg(
-                Arg::with_name("network")
-                .short("i")
+                Arg::new("network")
+                .short('i')
                 .long("network")
                 .takes_value(true)
                 .value_name("FILE")
                 .help("Input file (RON format)")
                 .required(true)
-                .last(true)
             )
-        )
-        .get_matches();
+    );
+
+    let arg_m = args.get_matches();
 
     match arg_m.subcommand() {
-        ( "train", Some(sub_m) ) => { train(sub_m.value_of("output").unwrap()) }
-        ( "test", Some(sub_m) ) => { test(sub_m.value_of("network").unwrap()) }
+        Some(("train", sub_m)) => { train(sub_m.value_of("output").unwrap()) }
+        Some(("test", sub_m)) => { test(sub_m.value_of("network").unwrap()) }
         _ => {
             println!("No command provided!");
             std::process::exit(0);

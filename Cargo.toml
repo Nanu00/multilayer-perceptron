@@ -6,11 +6,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "*"
+rand = "0.8.5"
 byteorder = "1.4.3"
 num = "0.4"
 termcolor = "1.1"
-ron = "0.6.5"
-clap = "2.33.3"
+ron = "0.7.0"
+clap = "3.1.12"
 indicatif = "0.16.2"
 serde = "1.0"
